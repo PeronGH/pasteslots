@@ -120,7 +120,7 @@
 			type="button"
 			onclick={paste}
 			disabled={busy}
-			class="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+			class="flex-1 rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
 		>
 			Paste
 		</button>
@@ -128,7 +128,7 @@
 			<button
 				type="button"
 				onclick={copy}
-				class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
+				class="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
 			>
 				{copied ? 'Copied!' : 'Copy'}
 			</button>
@@ -138,7 +138,7 @@
 				type="button"
 				onclick={clear}
 				disabled={busy}
-				class="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+				class="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-100 disabled:opacity-50"
 			>
 				Clear
 			</button>
