@@ -15,7 +15,9 @@ Runs entirely on **Cloudflare Workers + R2** (no Durable Objects, no database, n
 - Each slot is `IV ‖ AES-256-GCM(K2, msgpack({ mime, label, content }))`. Content **and** metadata
   are sealed together, so the server stores only opaque ciphertext keyed by `K1/0…K1/3`.
 - The server (SvelteKit endpoints under `src/routes/api/room/`) is a dumb conditional blob store:
-  list, get, optimistic-CAS put, delete. It performs no auth and holds no key.
+  list, get, and optimistic-CAS put. It performs no auth and holds no key. Clearing a slot writes
+  an encrypted tombstone via the same CAS put (R2's delete has no compare-and-swap), so it can't
+  clobber a concurrent write.
 - Clients poll `list` and decrypt only the slots whose etag changed.
 
 **The URL is the capability.** Anyone with the link has full read & write access; there is no

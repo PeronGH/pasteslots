@@ -9,7 +9,15 @@
 import { browser } from '$app/environment';
 import { type Bytes } from './bytes';
 import { open, seal, type RoomKeys } from './crypto';
-import { decodeSlot, encodeSlot, type SlotMime, type SlotPlaintext } from './envelope';
+import {
+	decodeSlot,
+	encodeSlot,
+	makeTombstone,
+	TOMBSTONE_MIME,
+	type SlotEnvelope,
+	type SlotMime,
+	type SlotPlaintext
+} from './envelope';
 import { EMPTY, EXPECTED_ETAG_HEADER, SLOT_COUNT, type SlotListEntry } from './protocol';
 
 export type SlotStatus = 'empty' | 'loading' | 'filled' | 'error';
@@ -143,18 +151,23 @@ export class RoomState {
 			if (res.status === 404) return this.#setEmpty(n);
 			if (!res.ok) throw new Error(`get failed: ${res.status}`);
 			const body = new Uint8Array(await res.arrayBuffer());
-			const plain = decodeSlot(await open(this.#keys.k2, body));
-			this.#applyPlain(n, entry.etag, plain, entry.size, entry.uploaded);
+			const envelope = decodeSlot(await open(this.#keys.k2, body));
+			// A tombstone is a cleared slot: present (so it carries a real etag) but shown as empty.
+			if (envelope.mime === TOMBSTONE_MIME) this.#setCleared(n, entry.etag);
+			else this.#applyPlain(n, entry.etag, envelope, entry.size, entry.uploaded);
 		} catch {
 			// A blob that won't decrypt is a visible bad slot, never silently accepted.
 			this.#setError(n, entry.etag);
 		}
 	}
 
-	/** Write content to a slot with optimistic CAS. Throws SlotConflictError on a 412. */
-	async write(n: number, plain: SlotPlaintext): Promise<void> {
+	/**
+	 * Conditional-CAS PUT of an envelope against the slot's expected etag. Throws SlotConflictError
+	 * on a 412 (after resyncing). Returns the new etag and stored size.
+	 */
+	async #put(n: number, envelope: SlotEnvelope): Promise<{ etag: string; size: number }> {
 		const expected = this.slots[n].etag;
-		const body = await seal(this.#keys.k2, encodeSlot(plain));
+		const body = await seal(this.#keys.k2, encodeSlot(envelope));
 		const res = await fetch(`/api/room/${this.#keys.k1}/${n}`, {
 			method: 'PUT',
 			headers: { [EXPECTED_ETAG_HEADER]: expected, 'content-type': 'application/octet-stream' },
@@ -169,18 +182,25 @@ export class RoomState {
 		if (!res.ok) throw new Error(`write failed: ${res.status}`);
 
 		const { etag } = (await res.json()) as { etag: string };
-		// Transient display timestamp, immediately stringified; never stored as a reactive Date.
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- see comment above
-		this.#applyPlain(n, etag, plain, body.length, new Date().toISOString());
 		this.#lastChangeAt = Date.now();
+		return { etag, size: body.length };
 	}
 
-	/** Clear a slot: delete the object, returning it to the empty state. */
+	/** Write content to a slot with optimistic CAS. Throws SlotConflictError on a 412. */
+	async write(n: number, plain: SlotPlaintext): Promise<void> {
+		const { etag, size } = await this.#put(n, plain);
+		// Transient display timestamp, immediately stringified; never stored as a reactive Date.
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- see comment above
+		this.#applyPlain(n, etag, plain, size, new Date().toISOString());
+	}
+
+	/**
+	 * Clear a slot by writing an encrypted tombstone with optimistic CAS (R2 delete has no CAS).
+	 * Throws SlotConflictError on a 412.
+	 */
 	async clear(n: number): Promise<void> {
-		const res = await fetch(`/api/room/${this.#keys.k1}/${n}`, { method: 'DELETE' });
-		if (!res.ok) throw new Error(`clear failed: ${res.status}`);
-		this.#setEmpty(n);
-		this.#lastChangeAt = Date.now();
+		const { etag } = await this.#put(n, makeTombstone());
+		this.#setCleared(n, etag);
 	}
 
 	#applyPlain(n: number, etag: string, plain: SlotPlaintext, size: number, uploaded: string) {
@@ -204,10 +224,18 @@ export class RoomState {
 		this.slots[n] = next;
 	}
 
+	/** Slot absent on the server: empty with the create-only sentinel etag. */
 	#setEmpty(n: number) {
 		const prev = this.slots[n];
 		if (prev.imageUrl) URL.revokeObjectURL(prev.imageUrl);
 		this.slots[n] = emptySlot();
+	}
+
+	/** Slot cleared via tombstone: shown as empty but keeps the real etag for the next CAS. */
+	#setCleared(n: number, etag: string) {
+		const prev = this.slots[n];
+		if (prev.imageUrl) URL.revokeObjectURL(prev.imageUrl);
+		this.slots[n] = { status: 'empty', etag };
 	}
 
 	#setError(n: number, etag: string) {

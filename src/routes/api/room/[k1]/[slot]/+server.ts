@@ -64,9 +64,6 @@ export const PUT: RequestHandler = async ({ params, platform, request }) => {
 	return json({ etag: result.etag }, { headers: NO_STORE });
 };
 
-/** Clear a slot: delete the object, returning it to the absent/"empty" state. */
-export const DELETE: RequestHandler = async ({ params, platform }) => {
-	const { bucket, key } = resolve(params, platform);
-	await bucket.delete(key);
-	return new Response(null, { status: 204, headers: NO_STORE });
-};
+// There is no DELETE: clearing is a conditional-CAS PUT of an encrypted tombstone (see the
+// client's clear()). R2's delete has no compare-and-swap, so a raw delete could clobber a
+// concurrent write — the tombstone keeps clearing on the same no-lost-update path as writes.

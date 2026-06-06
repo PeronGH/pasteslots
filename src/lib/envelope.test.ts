@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { asBytes } from './bytes';
-import { decodeSlot, encodeSlot, type SlotPlaintext } from './envelope';
+import {
+	decodeSlot,
+	encodeSlot,
+	makeTombstone,
+	TOMBSTONE_MIME,
+	type SlotPlaintext
+} from './envelope';
 
 const utf8 = (s: string) => asBytes(new TextEncoder().encode(s));
 
@@ -43,5 +49,16 @@ describe('encodeSlot / decodeSlot', () => {
 			content: new Uint8Array(1)
 		});
 		expect(() => decodeSlot(bad)).toThrow();
+	});
+
+	it('round-trips a tombstone and tags it as such', () => {
+		const tombstone = makeTombstone();
+		const decoded = decodeSlot(encodeSlot(tombstone));
+		expect(decoded.mime).toBe(TOMBSTONE_MIME);
+		expect(decoded).toEqual(tombstone);
+	});
+
+	it('gives each tombstone a distinct UUID payload', () => {
+		expect(makeTombstone().content).not.toEqual(makeTombstone().content);
 	});
 });
