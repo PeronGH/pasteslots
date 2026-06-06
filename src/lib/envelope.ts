@@ -1,7 +1,7 @@
 /**
- * Slot envelope: content + metadata packed into a single MessagePack object, which is then
- * sealed with one AES-GCM operation (see crypto.ts). Because metadata travels inside the
- * encrypted envelope, the server stores nothing descriptive about a slot's plaintext.
+ * Slot envelope: the content and its MIME type packed into a single MessagePack object, which is
+ * then sealed with one AES-GCM operation (see crypto.ts). Because the MIME type travels inside
+ * the encrypted envelope, the server stores nothing descriptive about a slot's plaintext.
  *
  * MessagePack (not JSON) so `content` stays raw bytes with no base64 inflation.
  *
@@ -22,8 +22,6 @@ export const TOMBSTONE_MIME = 'application/vnd.pasteslots.tombstone';
 
 export interface SlotPlaintext {
 	mime: SlotMime;
-	/** Human-readable label (e.g. a text snippet or "PNG image"). */
-	label: string;
 	content: Bytes;
 }
 
@@ -54,12 +52,8 @@ export function decodeSlot(bytes: Bytes): SlotEnvelope {
 		return { mime, content: asBytes(content) };
 	}
 
-	const { label } = obj;
-	if (
-		(mime !== 'text/plain' && mime !== 'text/html' && mime !== 'image/png') ||
-		typeof label !== 'string'
-	) {
+	if (mime !== 'text/plain' && mime !== 'text/html' && mime !== 'image/png') {
 		throw new Error('malformed slot envelope');
 	}
-	return { mime, label, content: asBytes(content) };
+	return { mime, content: asBytes(content) };
 }

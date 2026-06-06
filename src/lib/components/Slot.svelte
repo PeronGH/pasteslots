@@ -45,7 +45,7 @@
 		// Synchronous: content is already decrypted in memory, so no await before writing.
 		if (slot.status !== 'filled' || !slot.content || !slot.mime) return;
 		message = null;
-		writeClipboard({ mime: slot.mime, label: slot.label ?? '', content: slot.content })
+		writeClipboard({ mime: slot.mime, content: slot.content })
 			.then(() => {
 				copied = true;
 				setTimeout(() => (copied = false), 1200);
@@ -85,9 +85,7 @@
 
 <div class="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
 	<header class="flex items-center justify-between gap-2">
-		<h2 class="truncate text-sm font-semibold text-gray-700">
-			{slot.status === 'filled' && slot.label ? slot.label : `Slot ${index + 1}`}
-		</h2>
+		<h2 class="truncate text-sm font-semibold text-gray-700">Slot {index + 1}</h2>
 		{#if slot.status === 'filled' && slot.mime}
 			<span class="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
 				{mimeLabel[slot.mime]}
@@ -105,7 +103,7 @@
 		{:else if slot.status === 'error'}
 			<span class="text-red-600">{slot.error}</span>
 		{:else if slot.mime === 'image/png' && slot.imageUrl}
-			<img src={slot.imageUrl} alt={slot.label} class="max-h-40 max-w-full object-contain" />
+			<img src={slot.imageUrl} alt="Slot {index + 1}" class="max-h-40 max-w-full object-contain" />
 		{:else}
 			<!-- User content is shown as escaped text, never rendered as HTML, to avoid XSS. -->
 			<pre

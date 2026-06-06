@@ -16,13 +16,6 @@ const encoder = new TextEncoder();
 /** Preference order for what to capture when the clipboard offers multiple types. */
 const PREFERRED: SlotMime[] = ['image/png', 'text/html', 'text/plain'];
 
-function labelFor(mime: SlotMime, content: Uint8Array): string {
-	if (mime === 'image/png') return 'PNG image';
-	const oneLine = decoder.decode(content).replace(/\s+/g, ' ').trim();
-	if (!oneLine) return '(empty)';
-	return oneLine.length > 80 ? oneLine.slice(0, 79) + '…' : oneLine;
-}
-
 /**
  * Read the clipboard via the async Clipboard API. MUST be the first call in a click handler.
  * Returns the highest-priority supported type found.
@@ -33,7 +26,7 @@ export async function readClipboard(): Promise<SlotPlaintext> {
 		for (const item of items) {
 			if (item.types.includes(mime)) {
 				const content = new Uint8Array(await (await item.getType(mime)).arrayBuffer());
-				return { mime, label: labelFor(mime, content), content };
+				return { mime, content };
 			}
 		}
 	}
@@ -53,19 +46,17 @@ export async function readPasteEvent(event: ClipboardEvent): Promise<SlotPlainte
 			const file = item.getAsFile();
 			if (file) {
 				const content = new Uint8Array(await file.arrayBuffer());
-				return { mime: 'image/png', label: labelFor('image/png', content), content };
+				return { mime: 'image/png', content };
 			}
 		}
 	}
 	const html = data.getData('text/html');
 	if (html) {
-		const content = asBytes(encoder.encode(html));
-		return { mime: 'text/html', label: labelFor('text/html', content), content };
+		return { mime: 'text/html', content: asBytes(encoder.encode(html)) };
 	}
 	const text = data.getData('text/plain');
 	if (text) {
-		const content = asBytes(encoder.encode(text));
-		return { mime: 'text/plain', label: labelFor('text/plain', content), content };
+		return { mime: 'text/plain', content: asBytes(encoder.encode(text)) };
 	}
 	throw new Error('paste event has no supported content');
 }

@@ -27,7 +27,6 @@ export interface SlotView {
 	/** Current server etag, or the EMPTY sentinel when absent. */
 	etag: string;
 	mime?: SlotMime;
-	label?: string;
 	content?: Bytes;
 	size?: number;
 	uploaded?: string;
@@ -211,7 +210,6 @@ export class RoomState {
 			status: 'filled',
 			etag,
 			mime: plain.mime,
-			label: plain.label,
 			content: plain.content,
 			size,
 			uploaded

@@ -12,20 +12,12 @@ const utf8 = (s: string) => asBytes(new TextEncoder().encode(s));
 
 describe('encodeSlot / decodeSlot', () => {
 	it('round-trips text/plain', () => {
-		const slot: SlotPlaintext = {
-			mime: 'text/plain',
-			label: 'hello',
-			content: utf8('hello world')
-		};
+		const slot: SlotPlaintext = { mime: 'text/plain', content: utf8('hello world') };
 		expect(decodeSlot(encodeSlot(slot))).toEqual(slot);
 	});
 
 	it('round-trips text/html', () => {
-		const slot: SlotPlaintext = {
-			mime: 'text/html',
-			label: 'snippet',
-			content: utf8('<b>bold</b>')
-		};
+		const slot: SlotPlaintext = { mime: 'text/html', content: utf8('<b>bold</b>') };
 		expect(decodeSlot(encodeSlot(slot))).toEqual(slot);
 	});
 
@@ -34,7 +26,7 @@ describe('encodeSlot / decodeSlot', () => {
 		// inflate by ~33%; msgpack stores `content` as raw bin, so overhead is a tiny header.
 		const content = crypto.getRandomValues(new Uint8Array(4096));
 		content.set([137, 80, 78, 71, 13, 10, 26, 10], 0);
-		const slot: SlotPlaintext = { mime: 'image/png', label: 'PNG image', content };
+		const slot: SlotPlaintext = { mime: 'image/png', content };
 		const encoded = encodeSlot(slot);
 		expect(encoded.length).toBeLessThan(content.length + 64); // not content.length * 1.33
 		const decoded = decodeSlot(encoded);
@@ -45,7 +37,6 @@ describe('encodeSlot / decodeSlot', () => {
 	it('rejects an unknown mime type', () => {
 		const bad = encodeSlot({
 			mime: 'application/zip' as SlotPlaintext['mime'],
-			label: 'x',
 			content: new Uint8Array(1)
 		});
 		expect(() => decodeSlot(bad)).toThrow();
