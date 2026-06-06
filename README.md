@@ -1,42 +1,52 @@
-# sv
+# Paste Slots
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+An end-to-end encrypted, cross-device pasteboard. A "room" holds **4 fixed slots**; each can
+hold text, HTML, or a PNG image copied from your clipboard. Content is encrypted in the browser
+before it reaches the server, so the operator stores and syncs it without being able to read it.
 
-## Creating a project
+Runs entirely on **Cloudflare Workers + R2** (no Durable Objects, no database, no accounts).
 
-If you're seeing this, you've probably already done this step. Congrats!
+## How it works
 
-```sh
-# create a new project
-npx sv create my-app
-```
+- The secret `S` is a CSPRNG `crypto.randomUUID()` carried in the URL **fragment** (`https://app/#<S>`).
+  The fragment is never sent to the server, so the server never sees `S`.
+- Two independent keys are derived from `S` with HKDF-SHA256: `K1` (the room address, sent to the
+  server) and `K2` (the AES-256-GCM key, which never leaves the browser).
+- Each slot is `IV ‖ AES-256-GCM(K2, msgpack({ mime, label, content }))`. Content **and** metadata
+  are sealed together, so the server stores only opaque ciphertext keyed by `K1/0…K1/3`.
+- The server (SvelteKit endpoints under `src/routes/api/room/`) is a dumb conditional blob store:
+  list, get, optimistic-CAS put, delete. It performs no auth and holds no key.
+- Clients poll `list` and decrypt only the slots whose etag changed.
 
-To recreate this project with the same configuration:
+**The URL is the capability.** Anyone with the link has full read & write access; there is no
+login and no revocation short of clearing the slots. A lost URL means a lost room.
 
-```sh
-# recreate this project
-bun x sv@0.15.3 create --template minimal --types ts --add tailwindcss="plugins:typography,forms" prettier eslint --install bun pasteslots
-```
+## Usage
 
-## Developing
+Open the app; a room with a fresh secret is created automatically and written into the URL
+fragment. Use **Paste** to put your clipboard into a slot and **Copy** to read it back. Open the
+same URL on another device to sync.
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
+## Develop
 
 ```sh
-npm run build
+bun install
+bun run dev      # local R2 is simulated by Miniflare — no real bucket needed
+bun run test     # crypto / envelope / protocol unit tests
+bun run check    # type + Svelte diagnostics
 ```
 
-You can preview the production build with `npm run preview`.
+## Deploy
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+```sh
+wrangler r2 bucket create pasteslots   # one-time; binding BUCKET in wrangler.jsonc
+bun run deploy                         # vite build && wrangler deploy
+```
+
+## Scope
+
+Everything is encrypted in your browser with a key derived from the URL fragment, which never
+leaves the page — the server only ever stores the room address `K1` and ciphertext (you can
+confirm this in DevTools). It does not hide metadata (slot sizes, timestamps, which slots are
+occupied, the room address), and it is not designed to withstand a determined, targeted, or local
+attacker.

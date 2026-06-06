@@ -7,14 +7,17 @@
 	"name": "pasteslots",
 	"main": ".svelte-kit/cloudflare/_worker.js",
 	"compatibility_date": "2026-06-06",
-	"compatibility_flags": [
-		"nodejs_compat",
-		"nodejs_als"
-	],
+	"compatibility_flags": ["nodejs_compat", "nodejs_als"],
 	"assets": {
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"
 	},
+	"r2_buckets": [
+		{
+			"binding": "BUCKET",
+			"bucket_name": "pasteslots"
+		}
+	],
 	"observability": {
 		"enabled": true
 	},
