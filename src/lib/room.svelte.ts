@@ -8,7 +8,7 @@
 
 import { browser } from '$app/environment';
 import { type Bytes } from './bytes';
-import { open, seal, type RoomKeys } from './crypto';
+import { open, seal, signWrite, type RoomKeys } from './crypto';
 import {
 	decodeSlot,
 	encodeSlot,
@@ -18,7 +18,13 @@ import {
 	type SlotMime,
 	type SlotPlaintext
 } from './envelope';
-import { EMPTY, EXPECTED_ETAG_HEADER, SLOT_COUNT, type SlotListEntry } from './protocol';
+import {
+	EMPTY,
+	EXPECTED_ETAG_HEADER,
+	SIGNATURE_HEADER,
+	SLOT_COUNT,
+	type SlotListEntry
+} from './protocol';
 
 export type SlotStatus = 'empty' | 'loading' | 'filled' | 'error';
 
@@ -167,9 +173,14 @@ export class RoomState {
 	async #put(n: number, envelope: SlotEnvelope): Promise<{ etag: string; size: number }> {
 		const expected = this.slots[n].etag;
 		const body = await seal(this.#keys.k2, encodeSlot(envelope));
+		const sig = await signWrite(this.#keys.sk, n, expected, body);
 		const res = await fetch(`/api/room/${this.#keys.k1}/${n}`, {
 			method: 'PUT',
-			headers: { [EXPECTED_ETAG_HEADER]: expected, 'content-type': 'application/octet-stream' },
+			headers: {
+				[EXPECTED_ETAG_HEADER]: expected,
+				[SIGNATURE_HEADER]: sig,
+				'content-type': 'application/octet-stream'
+			},
 			body
 		});
 

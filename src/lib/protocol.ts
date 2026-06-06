@@ -24,7 +24,10 @@ export const EMPTY = 'empty';
  */
 export const EXPECTED_ETAG_HEADER = 'x-expected-etag';
 
-/** K1 is base64url of 256 bits ⇒ 43 chars, no padding. */
+/** Header carrying the base64url Ed25519 signature over `slot ‖ E_prev ‖ SHA-256(body)`. */
+export const SIGNATURE_HEADER = 'x-write-sig';
+
+/** K1 is base64url of an Ed25519 public key (32 bytes) ⇒ 43 chars, no padding. */
 export function isValidK1(k1: string): boolean {
 	return /^[A-Za-z0-9_-]{43}$/.test(k1);
 }

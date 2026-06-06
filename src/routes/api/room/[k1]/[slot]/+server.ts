@@ -1,9 +1,11 @@
 import { error, json } from '@sveltejs/kit';
+import { verifyWrite } from '$lib/crypto';
 import {
 	EXPECTED_ETAG_HEADER,
 	isValidK1,
 	parseSlot,
 	putConditionFor,
+	SIGNATURE_HEADER,
 	slotKey
 } from '$lib/protocol';
 import type { RequestHandler } from './$types';
@@ -17,7 +19,7 @@ function resolve(params: { k1: string; slot: string }, platform: App.Platform | 
 	if (slot === null) error(400, 'bad slot');
 	const bucket = platform?.env.BUCKET;
 	if (!bucket) error(503, 'storage unavailable');
-	return { bucket, key: slotKey(params.k1, slot) };
+	return { bucket, slot, key: slotKey(params.k1, slot) };
 }
 
 /**
@@ -42,15 +44,25 @@ export const GET: RequestHandler = async ({ params, platform, request }) => {
 };
 
 /**
- * Write a slot with optimistic compare-and-swap. The client sends its expected current etag
- * (a real etag, or the EMPTY sentinel for create-only). A single atomic conditional put — no
- * read-then-write TOCTOU. On conflict, return 412 + the fresh etag so the client resyncs in
- * one round trip.
+ * Write a slot with optimistic compare-and-swap, gated by an Ed25519 write signature.
+ *
+ * The client sends its expected current etag (a real etag, or the EMPTY sentinel) plus a
+ * signature over `slot ‖ E_prev ‖ SHA-256(body)`. We verify it against K1 (the room address is
+ * the Ed25519 public key) before the put, so a capture-capable middlebox can't forge a write or
+ * roll the slot back by swapping the cleartext etag — the signed E_prev is what we condition on.
+ * A single atomic conditional put follows; on conflict, return 412 + the fresh etag so the client
+ * resyncs in one round trip.
  */
 export const PUT: RequestHandler = async ({ params, platform, request }) => {
-	const { bucket, key } = resolve(params, platform);
+	const { bucket, slot, key } = resolve(params, platform);
 	const expected = request.headers.get(EXPECTED_ETAG_HEADER);
-	const body = await request.arrayBuffer();
+	const sig = request.headers.get(SIGNATURE_HEADER);
+	const body = new Uint8Array(await request.arrayBuffer());
+
+	if (expected === null || sig === null) error(400, 'missing etag or signature');
+	if (!(await verifyWrite(params.k1, slot, expected, body, sig))) {
+		error(403, 'bad write signature');
+	}
 
 	const result = await bucket.put(key, body, {
 		onlyIf: putConditionFor(expected),

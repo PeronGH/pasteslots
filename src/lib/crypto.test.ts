@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { deriveKeys, fromBase64Url, open, seal, toBase64Url } from './crypto';
+import { asBytes } from './bytes';
+import {
+	deriveKeys,
+	fromBase64Url,
+	open,
+	seal,
+	signWrite,
+	toBase64Url,
+	verifyWrite
+} from './crypto';
 
 const S = '11111111-2222-3333-4444-555555555555';
 
@@ -20,7 +29,9 @@ describe('deriveKeys', () => {
 		const a = await deriveKeys(S);
 		const b = await deriveKeys(S);
 		expect(a.k1).toBe(b.k1);
-		expect(a.k1).toMatch(/^[A-Za-z0-9_-]{43}$/); // 256 bits, base64url no padding
+		expect(a.k1).toMatch(/^[A-Za-z0-9_-]{43}$/); // Ed25519 public key (32 bytes), base64url
+		expect(a.sk).toEqual(b.sk);
+		expect(a.sk.length).toBe(32); // Ed25519 seed
 	});
 
 	it('yields different room addresses for different secrets', async () => {
@@ -82,5 +93,36 @@ describe('seal / open', () => {
 		const b = await deriveKeys('00000000-0000-0000-0000-000000000000');
 		const body = await seal(a.k2, new Uint8Array([9, 8, 7]));
 		await expect(open(b.k2, body)).rejects.toThrow();
+	});
+});
+
+describe('signWrite / verifyWrite', () => {
+	const body = asBytes(new Uint8Array([1, 2, 3, 4, 5]));
+
+	it('verifies a well-formed signature against K1', async () => {
+		const { k1, sk } = await deriveKeys(S);
+		const sig = await signWrite(sk, 2, 'etag-abc', body);
+		expect(await verifyWrite(k1, 2, 'etag-abc', body, sig)).toBe(true);
+	});
+
+	it('rejects when slot, E_prev, body, or signature is altered', async () => {
+		const { k1, sk } = await deriveKeys(S);
+		const sig = await signWrite(sk, 2, 'etag-abc', body);
+		expect(await verifyWrite(k1, 3, 'etag-abc', body, sig)).toBe(false); // moved slot
+		expect(await verifyWrite(k1, 2, 'etag-xyz', body, sig)).toBe(false); // swapped E_prev (rollback)
+		expect(await verifyWrite(k1, 2, 'etag-abc', asBytes(new Uint8Array([9])), sig)).toBe(false); // body
+		expect(await verifyWrite(k1, 2, 'etag-abc', body, toBase64Url(new Uint8Array(64)))).toBe(false); // sig
+	});
+
+	it('rejects a signature verified against a different room', async () => {
+		const a = await deriveKeys(S);
+		const b = await deriveKeys('00000000-0000-0000-0000-000000000000');
+		const sig = await signWrite(a.sk, 0, 'empty', body);
+		expect(await verifyWrite(b.k1, 0, 'empty', body, sig)).toBe(false);
+	});
+
+	it('returns false (never throws) on malformed signature input', async () => {
+		const { k1 } = await deriveKeys(S);
+		expect(await verifyWrite(k1, 0, 'empty', body, 'not-base64url!!')).toBe(false);
 	});
 });
