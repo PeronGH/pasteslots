@@ -42,13 +42,6 @@
 </svelte:head>
 
 <main class="mx-auto max-w-3xl px-4 py-8">
-	<header class="mb-6">
-		<h1 class="text-2xl font-bold text-gray-900">Paste Slots</h1>
-		<p class="mt-1 text-sm text-gray-500">
-			An end-to-end encrypted pasteboard. Open this same link on another device to sync.
-		</p>
-	</header>
-
 	{#if initError}
 		<p class="rounded-lg bg-red-50 p-4 text-sm text-red-700">{initError}</p>
 	{:else if room}
