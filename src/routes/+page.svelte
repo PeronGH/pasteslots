@@ -52,7 +52,17 @@
 	{#if initError}
 		<p class="rounded-lg bg-red-50 p-4 text-sm text-red-700">{initError}</p>
 	{:else if room}
-		<div class="mb-6 flex flex-wrap items-center gap-3 rounded-lg bg-amber-50 p-3">
+		{#if room.syncError}
+			<p class="mb-4 text-xs text-amber-700">⚠ {room.syncError} — retrying…</p>
+		{/if}
+
+		<div class="grid grid-cols-2 gap-4">
+			{#each { length: SLOT_COUNT }, index (index)}
+				<Slot {room} {index} />
+			{/each}
+		</div>
+
+		<div class="mt-6 flex flex-wrap items-center gap-3 rounded-lg bg-amber-50 p-3">
 			<button
 				type="button"
 				onclick={copyLink}
@@ -64,16 +74,6 @@
 				Anyone with this link has full read &amp; write access. The secret lives only in the URL
 				fragment and is never sent to the server.
 			</p>
-		</div>
-
-		{#if room.syncError}
-			<p class="mb-4 text-xs text-amber-700">⚠ {room.syncError} — retrying…</p>
-		{/if}
-
-		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-			{#each { length: SLOT_COUNT }, index (index)}
-				<Slot {room} {index} />
-			{/each}
 		</div>
 	{:else}
 		<p class="text-sm text-gray-400">Initializing…</p>
