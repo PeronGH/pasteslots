@@ -29,6 +29,9 @@ import {
 
 const NO_BODY = asBytes(new Uint8Array(0));
 
+/** GCM additional-authenticated-data that pins a sealed blob to its slot index. */
+const slotAad = (n: number): Bytes => asBytes(Uint8Array.of(n));
+
 export type SlotStatus = 'empty' | 'loading' | 'filled' | 'error';
 
 export interface SlotView {
@@ -176,7 +179,7 @@ export class RoomState {
 			if (res.status === 404) return this.#setEmpty(n);
 			if (!res.ok) throw new Error(`get failed: ${res.status}`);
 			const body = new Uint8Array(await res.arrayBuffer());
-			const envelope = decodeSlot(await open(this.#keys.k2, body));
+			const envelope = decodeSlot(await open(this.#keys.k2, body, slotAad(n)));
 			// A tombstone is a cleared slot: present (so it carries a real etag) but shown as empty.
 			if (envelope.mime === TOMBSTONE_MIME) this.#setCleared(n, entry.etag);
 			else this.#applyPlain(n, entry.etag, envelope, entry.size, entry.uploaded);
@@ -192,7 +195,7 @@ export class RoomState {
 	 */
 	async #put(n: number, envelope: SlotEnvelope): Promise<{ etag: string; size: number }> {
 		const expected = this.slots[n].etag;
-		const body = await seal(this.#keys.k2, encodeSlot(envelope));
+		const body = await seal(this.#keys.k2, encodeSlot(envelope), slotAad(n));
 		const res = await this.#signedFetch('PUT', `/api/room/${this.#keys.k1}/${n}`, expected, body);
 
 		if (res.status === 412) {

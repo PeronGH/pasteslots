@@ -128,11 +128,15 @@ export async function verifyRequest(
 
 const IV_BYTES = 12;
 
-/** Seal a plaintext: returns IV(12) ‖ AES-256-GCM(K2, plaintext). Fresh random IV per call. */
-export async function seal(k2: CryptoKey, plaintext: Bytes): Promise<Bytes> {
+/**
+ * Seal a plaintext: returns IV(12) ‖ AES-256-GCM(K2, plaintext). Fresh random IV per call.
+ * `aad` (additional authenticated data) is covered by the tag but not encrypted — used to pin a
+ * blob to its slot, so it cannot be moved to another slot without the tag failing.
+ */
+export async function seal(k2: CryptoKey, plaintext: Bytes, aad?: Bytes): Promise<Bytes> {
 	const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
 	const ciphertext = new Uint8Array(
-		await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k2, plaintext)
+		await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: aad }, k2, plaintext)
 	);
 	const body = new Uint8Array(IV_BYTES + ciphertext.length);
 	body.set(iv, 0);
@@ -142,11 +146,14 @@ export async function seal(k2: CryptoKey, plaintext: Bytes): Promise<Bytes> {
 
 /**
  * Open a sealed body (IV ‖ ciphertext). Throws if the GCM tag fails — i.e. any modified,
- * corrupted, or forged blob is rejected rather than silently accepted.
+ * corrupted, forged, or wrong-slot (`aad` mismatch) blob is rejected rather than silently
+ * accepted. `aad` must match the value passed to `seal`.
  */
-export async function open(k2: CryptoKey, body: Bytes): Promise<Bytes> {
+export async function open(k2: CryptoKey, body: Bytes, aad?: Bytes): Promise<Bytes> {
 	if (body.length <= IV_BYTES) throw new Error('sealed body too short');
 	const iv = body.subarray(0, IV_BYTES);
 	const ciphertext = body.subarray(IV_BYTES);
-	return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, k2, ciphertext));
+	return new Uint8Array(
+		await crypto.subtle.decrypt({ name: 'AES-GCM', iv, additionalData: aad }, k2, ciphertext)
+	);
 }

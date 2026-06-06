@@ -13,8 +13,9 @@ Runs entirely on **Cloudflare Workers + R2** (no Durable Objects, no database, n
 - Three values are derived from `S` with HKDF-SHA256: an **Ed25519 signing seed** `sk`
   (`info="auth"`), the room address `K1 = pub(sk)` (the Ed25519 public key, sent to the server),
   and `K2` (the AES-256-GCM content key, `info="enc"`). `sk` and `K2` never leave the browser.
-- Each slot is `IV ‖ AES-256-GCM(K2, msgpack({ mime, content }))`. The MIME type is sealed
-  together with the content, so the server stores only opaque ciphertext keyed by `K1/0…K1/3`.
+- Each slot is `IV ‖ AES-256-GCM(K2, msgpack({ mime, content }))`, with the slot index as GCM
+  additional data so a blob can't be moved between slots without failing its tag. The MIME type is
+  sealed together with the content, so the server stores only opaque ciphertext keyed by `K1/0…K1/3`.
 - The server (SvelteKit endpoints under `src/routes/api/room/`) is a dumb blob store: list, get,
   and optimistic-CAS put. It holds no key. **Every request** (read, list, and write) carries an
   **Ed25519 signature** over `method ‖ path ‖ timestamp ‖ E_prev ‖ SHA-256(body)`, verified

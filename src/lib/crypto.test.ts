@@ -94,6 +94,16 @@ describe('seal / open', () => {
 		const body = await seal(a.k2, new Uint8Array([9, 8, 7]));
 		await expect(open(b.k2, body)).rejects.toThrow();
 	});
+
+	it('binds a blob to its slot via AAD', async () => {
+		const { k2 } = await deriveKeys(S);
+		const slot0 = asBytes(Uint8Array.of(0));
+		const slot1 = asBytes(Uint8Array.of(1));
+		const body = await seal(k2, new Uint8Array([1, 2, 3]), slot0);
+		expect(await open(k2, body, slot0)).toEqual(new Uint8Array([1, 2, 3])); // right slot
+		await expect(open(k2, body, slot1)).rejects.toThrow(); // moved to another slot
+		await expect(open(k2, body)).rejects.toThrow(); // AAD stripped
+	});
 });
 
 describe('signRequest / verifyRequest', () => {

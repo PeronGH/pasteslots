@@ -7,7 +7,7 @@ End-to-end encrypted 4-slot pasteboard; see `README.md` for the design. Key modu
 - `src/lib/crypto.ts` — HKDF derivation of `sk` (Ed25519 signing seed, `info="auth"`), `K1 = pub(sk)`
   (room address + verify key), and `K2` (content key, `info="enc"`); AES-GCM seal/open; Ed25519
   `signRequest`/`verifyRequest` over `method ‖ path ‖ timestamp ‖ E_prev ‖ SHA-256(body)` (via
-  `@noble/ed25519`).
+  `@noble/ed25519`). `seal`/`open` take the slot index as GCM AAD, pinning each blob to its slot.
 - `src/lib/envelope.ts` — MessagePack slot envelope (content + metadata sealed together).
 - `src/lib/protocol.ts` — wire protocol shared by client and server (validation, CAS mapping, headers).
 - `src/lib/room.svelte.ts` — client polling sync + signed optimistic-CAS writes (`#signedFetch`).
