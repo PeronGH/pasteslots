@@ -3,15 +3,16 @@
  *
  * From the URL-fragment secret `S` we derive three values via distinct, constant HKDF `info`
  * labels (domain separators, not secret salts — so derivation reproduces from `S` alone):
- *   sk = HKDF-SHA256(S, info="auth") — an Ed25519 SEED; signs writes; never leaves the browser
+ *   sk = HKDF-SHA256(S, info="auth") — an Ed25519 SEED; signs requests; never leaves the browser
  *   K1 = Ed25519 public key = pub(sk) — the room address AND the server's write-verify key
  *   K2 = HKDF-SHA256(S, info="enc")  — the AES-256-GCM key, NON-EXTRACTABLE, never leaves the browser
  *
- * `K1` is public and reveals nothing about `sk`, `S`, or `K2`. Each write carries an Ed25519
- * signature over `slot ‖ E_prev ‖ SHA-256(body)`, which the honest server verifies against `K1`
- * before its conditional put — closing the rollback-replay gap (the CAS etag is no longer a
- * cleartext, attacker-malleable token). This single-hash simplicity is only safe because `S` is a
- * high-entropy CSPRNG UUID (see the UUID generation in the page component).
+ * `K1` is public and reveals nothing about `sk`, `S`, or `K2`. Every request (read, list, and
+ * write) carries an Ed25519 signature over a canonical `method ‖ path ‖ timestamp ‖ E_prev ‖
+ * SHA-256(body)`, which the server verifies against `K1` (see hooks.server.ts). This makes `K1`
+ * alone inert — an attacker who only learns the room address can neither write nor surveil
+ * metadata — and the signed timestamp + E_prev close write rollback-replay. This single-hash
+ * simplicity is only safe because `S` is a high-entropy CSPRNG UUID (see the page component).
  */
 
 import * as ed from '@noble/ed25519';
@@ -42,7 +43,7 @@ export interface RoomKeys {
 	k1: string;
 	/** AES-256-GCM content key: non-extractable, stays in the browser. */
 	k2: CryptoKey;
-	/** Ed25519 signing seed (private); signs writes, never leaves the browser. */
+	/** Ed25519 signing seed (private); signs requests, never leaves the browser. */
 	sk: Bytes;
 }
 
@@ -73,39 +74,52 @@ export async function deriveKeys(secret: string): Promise<RoomKeys> {
 }
 
 /**
- * The byte string an Ed25519 write signature covers: `slot(1) ‖ E_prev(utf8) ‖ SHA-256(body)`.
- * The fixed-length slot (front) and hash (back) make the variable-length `E_prev` unambiguous.
+ * Canonical byte string an Ed25519 request signature covers, newline-joined so the
+ * variable-length fields stay unambiguous:
+ *
+ *   method ‖ path ‖ timestamp ‖ E_prev ‖ base64url(SHA-256(body))
+ *
+ * Binding the method + path gates every endpoint (a read signature can't be reused for a
+ * different slot or for a write); the timestamp gives freshness; E_prev keeps the CAS token
+ * non-malleable on writes (empty string for reads); the body hash pins the payload.
  */
-async function writeMessage(slot: number, ePrev: string, body: Bytes): Promise<Bytes> {
-	const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', body));
-	const ep = utf8(ePrev);
-	const msg = new Uint8Array(1 + ep.length + hash.length);
-	msg[0] = slot;
-	msg.set(ep, 1);
-	msg.set(hash, 1 + ep.length);
-	return asBytes(msg);
+async function requestMessage(
+	method: string,
+	path: string,
+	timestamp: string,
+	ePrev: string,
+	body: Bytes
+): Promise<Bytes> {
+	const bodyHash = toBase64Url(new Uint8Array(await crypto.subtle.digest('SHA-256', body)));
+	return utf8([method, path, timestamp, ePrev, bodyHash].join('\n'));
 }
 
-/** Sign a write with the room's Ed25519 seed. Returns a base64url detached signature. */
-export async function signWrite(
+/** Sign a request with the room's Ed25519 seed. Returns a base64url detached signature. */
+export async function signRequest(
 	sk: Bytes,
-	slot: number,
+	method: string,
+	path: string,
+	timestamp: string,
 	ePrev: string,
 	body: Bytes
 ): Promise<string> {
-	return toBase64Url(await ed.signAsync(await writeMessage(slot, ePrev, body), sk));
+	return toBase64Url(
+		await ed.signAsync(await requestMessage(method, path, timestamp, ePrev, body), sk)
+	);
 }
 
-/** Verify a write signature against the room address `K1`. Returns false on any malformed input. */
-export async function verifyWrite(
+/** Verify a request signature against the room address `K1`. Returns false on any malformed input. */
+export async function verifyRequest(
 	k1: string,
-	slot: number,
+	method: string,
+	path: string,
+	timestamp: string,
 	ePrev: string,
 	body: Bytes,
 	sigB64: string
 ): Promise<boolean> {
 	try {
-		const msg = await writeMessage(slot, ePrev, body);
+		const msg = await requestMessage(method, path, timestamp, ePrev, body);
 		return await ed.verifyAsync(fromBase64Url(sigB64), msg, fromBase64Url(k1));
 	} catch {
 		return false;

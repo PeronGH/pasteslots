@@ -5,9 +5,9 @@ import {
 	fromBase64Url,
 	open,
 	seal,
-	signWrite,
+	signRequest,
 	toBase64Url,
-	verifyWrite
+	verifyRequest
 } from './crypto';
 
 const S = '11111111-2222-3333-4444-555555555555';
@@ -96,33 +96,44 @@ describe('seal / open', () => {
 	});
 });
 
-describe('signWrite / verifyWrite', () => {
+describe('signRequest / verifyRequest', () => {
 	const body = asBytes(new Uint8Array([1, 2, 3, 4, 5]));
+	const PUT = 'PUT';
+	const PATH = '/api/room/x/2';
+	const TS = '1700000000';
 
 	it('verifies a well-formed signature against K1', async () => {
 		const { k1, sk } = await deriveKeys(S);
-		const sig = await signWrite(sk, 2, 'etag-abc', body);
-		expect(await verifyWrite(k1, 2, 'etag-abc', body, sig)).toBe(true);
+		const sig = await signRequest(sk, PUT, PATH, TS, 'etag-abc', body);
+		expect(await verifyRequest(k1, PUT, PATH, TS, 'etag-abc', body, sig)).toBe(true);
 	});
 
-	it('rejects when slot, E_prev, body, or signature is altered', async () => {
+	it('rejects when any signed field is altered', async () => {
 		const { k1, sk } = await deriveKeys(S);
-		const sig = await signWrite(sk, 2, 'etag-abc', body);
-		expect(await verifyWrite(k1, 3, 'etag-abc', body, sig)).toBe(false); // moved slot
-		expect(await verifyWrite(k1, 2, 'etag-xyz', body, sig)).toBe(false); // swapped E_prev (rollback)
-		expect(await verifyWrite(k1, 2, 'etag-abc', asBytes(new Uint8Array([9])), sig)).toBe(false); // body
-		expect(await verifyWrite(k1, 2, 'etag-abc', body, toBase64Url(new Uint8Array(64)))).toBe(false); // sig
+		const sig = await signRequest(sk, PUT, PATH, TS, 'etag-abc', body);
+		expect(await verifyRequest(k1, 'GET', PATH, TS, 'etag-abc', body, sig)).toBe(false); // method
+		expect(await verifyRequest(k1, PUT, '/api/room/x/3', TS, 'etag-abc', body, sig)).toBe(false); // path/slot
+		expect(await verifyRequest(k1, PUT, PATH, '1700000001', 'etag-abc', body, sig)).toBe(false); // timestamp
+		expect(await verifyRequest(k1, PUT, PATH, TS, 'etag-xyz', body, sig)).toBe(false); // E_prev (rollback)
+		expect(
+			await verifyRequest(k1, PUT, PATH, TS, 'etag-abc', asBytes(new Uint8Array([9])), sig)
+		).toBe(false); // body
+		expect(
+			await verifyRequest(k1, PUT, PATH, TS, 'etag-abc', body, toBase64Url(new Uint8Array(64)))
+		).toBe(false); // signature
 	});
 
 	it('rejects a signature verified against a different room', async () => {
 		const a = await deriveKeys(S);
 		const b = await deriveKeys('00000000-0000-0000-0000-000000000000');
-		const sig = await signWrite(a.sk, 0, 'empty', body);
-		expect(await verifyWrite(b.k1, 0, 'empty', body, sig)).toBe(false);
+		const sig = await signRequest(a.sk, 'GET', '/api/room/x', TS, '', body);
+		expect(await verifyRequest(b.k1, 'GET', '/api/room/x', TS, '', body, sig)).toBe(false);
 	});
 
 	it('returns false (never throws) on malformed signature input', async () => {
 		const { k1 } = await deriveKeys(S);
-		expect(await verifyWrite(k1, 0, 'empty', body, 'not-base64url!!')).toBe(false);
+		expect(await verifyRequest(k1, 'GET', '/api/room/x', TS, '', body, 'not-base64url!!')).toBe(
+			false
+		);
 	});
 });

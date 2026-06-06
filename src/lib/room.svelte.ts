@@ -7,8 +7,8 @@
  */
 
 import { browser } from '$app/environment';
-import { type Bytes } from './bytes';
-import { open, seal, signWrite, type RoomKeys } from './crypto';
+import { asBytes, type Bytes } from './bytes';
+import { open, seal, signRequest, type RoomKeys } from './crypto';
 import {
 	decodeSlot,
 	encodeSlot,
@@ -23,8 +23,11 @@ import {
 	EXPECTED_ETAG_HEADER,
 	SIGNATURE_HEADER,
 	SLOT_COUNT,
+	TIMESTAMP_HEADER,
 	type SlotListEntry
 } from './protocol';
+
+const NO_BODY = asBytes(new Uint8Array(0));
 
 export type SlotStatus = 'empty' | 'loading' | 'filled' | 'error';
 
@@ -117,11 +120,28 @@ export class RoomState {
 		this.#timer = setTimeout(this.#tick, delay);
 	}
 
+	/**
+	 * Fetch with a fresh per-request Ed25519 signature (and timestamp) so the server can prove the
+	 * caller holds `S`. `ePrev` is the empty string for reads; for writes it is the expected etag
+	 * (also used as the CAS condition) and is signed so it can't be swapped in transit.
+	 */
+	async #signedFetch(method: string, path: string, ePrev: string, body?: Bytes): Promise<Response> {
+		const timestamp = Math.floor(Date.now() / 1000).toString();
+		const sig = await signRequest(this.#keys.sk, method, path, timestamp, ePrev, body ?? NO_BODY);
+		const headers: Record<string, string> = {
+			[TIMESTAMP_HEADER]: timestamp,
+			[SIGNATURE_HEADER]: sig
+		};
+		if (ePrev) headers[EXPECTED_ETAG_HEADER] = ePrev;
+		if (body) headers['content-type'] = 'application/octet-stream';
+		return fetch(path, { method, headers, body });
+	}
+
 	/** One sync pass: list the room, then GET + decrypt only the slots whose etag changed. */
 	async poll() {
 		let listing: SlotListEntry[];
 		try {
-			const res = await fetch(`/api/room/${this.#keys.k1}`);
+			const res = await this.#signedFetch('GET', `/api/room/${this.#keys.k1}`, '');
 			if (!res.ok) throw new Error(`list failed: ${res.status}`);
 			listing = (await res.json()) as SlotListEntry[];
 			this.syncError = null;
@@ -152,7 +172,7 @@ export class RoomState {
 	async #fetchSlot(n: number, entry: SlotListEntry) {
 		this.slots[n].status = 'loading';
 		try {
-			const res = await fetch(`/api/room/${this.#keys.k1}/${n}`);
+			const res = await this.#signedFetch('GET', `/api/room/${this.#keys.k1}/${n}`, '');
 			if (res.status === 404) return this.#setEmpty(n);
 			if (!res.ok) throw new Error(`get failed: ${res.status}`);
 			const body = new Uint8Array(await res.arrayBuffer());
@@ -173,16 +193,7 @@ export class RoomState {
 	async #put(n: number, envelope: SlotEnvelope): Promise<{ etag: string; size: number }> {
 		const expected = this.slots[n].etag;
 		const body = await seal(this.#keys.k2, encodeSlot(envelope));
-		const sig = await signWrite(this.#keys.sk, n, expected, body);
-		const res = await fetch(`/api/room/${this.#keys.k1}/${n}`, {
-			method: 'PUT',
-			headers: {
-				[EXPECTED_ETAG_HEADER]: expected,
-				[SIGNATURE_HEADER]: sig,
-				'content-type': 'application/octet-stream'
-			},
-			body
-		});
+		const res = await this.#signedFetch('PUT', `/api/room/${this.#keys.k1}/${n}`, expected, body);
 
 		if (res.status === 412) {
 			this.#reschedule(0);

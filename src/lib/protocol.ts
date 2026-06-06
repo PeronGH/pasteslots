@@ -24,8 +24,14 @@ export const EMPTY = 'empty';
  */
 export const EXPECTED_ETAG_HEADER = 'x-expected-etag';
 
-/** Header carrying the base64url Ed25519 signature over `slot ‖ E_prev ‖ SHA-256(body)`. */
-export const SIGNATURE_HEADER = 'x-write-sig';
+/** Header carrying the request's unix-seconds timestamp; bound into the signature for freshness. */
+export const TIMESTAMP_HEADER = 'x-timestamp';
+
+/** Header carrying the base64url Ed25519 signature over the canonical request (see crypto.ts). */
+export const SIGNATURE_HEADER = 'x-signature';
+
+/** Accepted clock skew for a signed request, in seconds. Outside this, the request is rejected. */
+export const SIGNED_WINDOW_S = 300;
 
 /** K1 is base64url of an Ed25519 public key (32 bytes) ⇒ 43 chars, no padding. */
 export function isValidK1(k1: string): boolean {
