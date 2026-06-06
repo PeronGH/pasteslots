@@ -21,8 +21,7 @@ The secret never leaves the browser: only `K1` (the public room address) and cip
 ## UI
 
 Styled with **Tailwind CSS v4** (`@tailwindcss/vite`, plus the `forms` and `typography` plugins).
-
-Components from **[Bits UI](https://bits-ui.com)** (headless Svelte components). Docs for LLMs: https://bits-ui.com/docs/llms.txt
+Plain Tailwind-styled elements; no component library.
 
 ## Package manager
 
