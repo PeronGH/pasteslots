@@ -4,6 +4,8 @@
 	import { RoomState } from '$lib/room.svelte';
 	import Slot from '$lib/components/Slot.svelte';
 	import { SLOT_COUNT } from '$lib/protocol';
+	import Link from '~icons/lucide/link';
+	import Check from '~icons/lucide/check';
 
 	let room = $state<RoomState | null>(null);
 	let initError = $state<string | null>(null);
@@ -59,14 +61,12 @@
 			<button
 				type="button"
 				onclick={copyLink}
-				class="rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-700"
+				class="flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-700"
 			>
+				{#if linkCopied}<Check />{:else}<Link />{/if}
 				{linkCopied ? 'Link copied!' : 'Copy room link'}
 			</button>
-			<p class="text-xs text-amber-800">
-				Anyone with this link has full read &amp; write access. The secret lives only in the URL
-				fragment and is never sent to the server.
-			</p>
+			<p class="text-xs text-amber-800">Anyone with this link can read &amp; write.</p>
 		</div>
 	{:else}
 		<p class="text-sm text-gray-400">Initializing…</p>

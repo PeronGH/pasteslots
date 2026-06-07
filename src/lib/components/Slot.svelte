@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { readClipboard, readPasteEvent, writeClipboard } from '$lib/clipboard';
 	import { RoomState, SlotConflictError } from '$lib/room.svelte';
+	import ClipboardPaste from '~icons/lucide/clipboard-paste';
+	import Copy from '~icons/lucide/copy';
+	import Check from '~icons/lucide/check';
+	import Trash2 from '~icons/lucide/trash-2';
 
 	let { room, index }: { room: RoomState; index: number } = $props();
 
@@ -33,7 +37,7 @@
 		} catch (error) {
 			if (error instanceof SlotConflictError) message = error.message;
 			else {
-				message = 'Could not read the clipboard — use manual paste below.';
+				message = 'Clipboard blocked. Use manual paste below.';
 				showManual = true;
 			}
 		} finally {
@@ -115,22 +119,26 @@
 		<p class="text-xs text-gray-400">{formatSize(slot.size)}</p>
 	{/if}
 
-	<div class="flex flex-wrap gap-2">
+	<div class="flex flex-nowrap gap-2">
 		<button
 			type="button"
 			onclick={paste}
 			disabled={busy}
-			class="flex-1 rounded-lg bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+			aria-label="Paste"
+			class="flex flex-1 items-center justify-center rounded-lg bg-gray-900 px-3 py-2 text-white hover:bg-gray-700 disabled:opacity-50"
 		>
-			Paste
+			<ClipboardPaste />
 		</button>
 		{#if slot.status === 'filled'}
 			<button
 				type="button"
 				onclick={copy}
-				class="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
+				aria-label={copied ? 'Copied' : 'Copy'}
+				class="flex flex-1 items-center justify-center rounded-lg border border-gray-300 px-3 py-2 hover:bg-gray-100"
+				class:text-green-600={copied}
+				class:text-gray-700={!copied}
 			>
-				{copied ? 'Copied!' : 'Copy'}
+				{#if copied}<Check />{:else}<Copy />{/if}
 			</button>
 		{/if}
 		{#if slot.status === 'filled' || slot.status === 'error'}
@@ -138,9 +146,10 @@
 				type="button"
 				onclick={clear}
 				disabled={busy}
-				class="flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+				aria-label="Clear"
+				class="flex flex-1 items-center justify-center rounded-lg border border-gray-300 px-3 py-2 text-gray-500 hover:bg-gray-100 disabled:opacity-50"
 			>
-				Clear
+				<Trash2 />
 			</button>
 		{/if}
 	</div>

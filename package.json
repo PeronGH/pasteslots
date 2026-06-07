@@ -20,6 +20,7 @@
 	"devDependencies": {
 		"@eslint/compat": "^2.0.4",
 		"@eslint/js": "^10.0.1",
+		"@iconify-json/lucide": "^1.2.111",
 		"@sveltejs/adapter-auto": "^7.0.1",
 		"@sveltejs/adapter-cloudflare": "^7.2.8",
 		"@sveltejs/kit": "^2.57.0",
@@ -41,6 +42,7 @@
 		"tailwindcss": "^4.2.2",
 		"typescript": "^6.0.2",
 		"typescript-eslint": "^8.58.1",
+		"unplugin-icons": "^23.0.1",
 		"vite": "^8.0.7",
 		"vitest": "^4.1.8",
 		"wrangler": "^4.98.0"
