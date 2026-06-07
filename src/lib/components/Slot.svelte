@@ -147,7 +147,7 @@
 				onclick={clear}
 				disabled={busy}
 				aria-label="Clear"
-				class="flex flex-1 items-center justify-center rounded-lg border border-gray-300 px-3 py-2 text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+				class="flex flex-1 items-center justify-center rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
 			>
 				<Trash2 />
 			</button>
